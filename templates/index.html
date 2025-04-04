@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultravox Agent Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <!-- Import map to tell browser where to find npm modules -->
+    <script type="importmap">
+      {
+        "imports": {
+          "livekit-client": "https://esm.sh/livekit-client"
+        }
+      }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Talk to Raj from Mosaic Asset Management</h1>
+        <div class="chat-container">
+            <div id="chat-messages">
+                <div class="message-container waiting">
+                    <p>Click the button below to start the conversation...</p>
+                </div>
+            </div>
+            <div class="controls">
+                <button id="start-call" class="btn">Start Call</button>
+                <button id="end-call" class="btn btn-danger" disabled>End Call</button>
+            </div>
+            <div class="status-container">
+                <p id="status-message">Ready to start</p>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "asyncio>=3.4.3",
+    "flask>=3.1.0",
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
     "ultravox-client>=0.0.9",
