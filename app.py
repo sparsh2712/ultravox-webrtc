@@ -159,5 +159,16 @@ def get_ultravox_voices():
         print(f"Error fetching Ultravox voices: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/save-transcript', methods=['POST'])
+def save_transcripts():
+    data = request.json
+    call_data = data.get('call')
+    event_type = data.get('event')
+    
+    if not (event_type == 'call.ended' and call_data):
+        return jsonify({"error": "Failed"}), 500
+    
+    
+
 if __name__ == '__main__':
     app.run(debug=True, port=8000, host='0.0.0.0')
