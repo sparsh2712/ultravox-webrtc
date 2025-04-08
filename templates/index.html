@@ -16,7 +16,23 @@
 </head>
 <body>
     <div class="container">
-        <h1>Talk to Raj from Mosaic Asset Management</h1>
+        <h1>Talk to Ashok from Mosaic Asset Management</h1>
+        
+        <div class="voice-settings">
+            <div class="settings-header">
+                <h3>Voice Settings</h3>
+                <button id="toggle-settings" class="toggle-btn">Show Options</button>
+            </div>
+            
+            <div class="settings-content" id="settings-content">
+                <div class="voice-selector">
+                    <label>Select Voice:</label>
+                    <select id="voice-select"></select>
+                    <button id="refresh-voices" class="btn btn-small">Refresh Voices</button>
+                </div>
+            </div>
+        </div>
+        
         <div class="chat-container">
             <div id="chat-messages">
                 <div class="message-container waiting">

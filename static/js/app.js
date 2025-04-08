@@ -1,4 +1,3 @@
-// Import Ultravox client as an ES module
 import { UltravoxSession, UltravoxSessionStatus } from 'https://cdn.jsdelivr.net/npm/ultravox-client/+esm';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -6,9 +5,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const endCallBtn = document.getElementById('end-call');
     const statusMessage = document.getElementById('status-message');
     const chatMessages = document.getElementById('chat-messages');
+    const toggleSettingsBtn = document.getElementById('toggle-settings');
+    const settingsContent = document.getElementById('settings-content');
+    const voiceSelect = document.getElementById('voice-select');
+    const refreshVoicesBtn = document.getElementById('refresh-voices');
     
     let ultravoxSession = null;
     let lastTranscript = null;
+    let settingsVisible = false;
 
     function updateStatus(message) {
         statusMessage.textContent = message;
@@ -25,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messageDiv.appendChild(messageText);
         chatMessages.appendChild(messageDiv);
         
-        // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
@@ -33,14 +36,73 @@ document.addEventListener('DOMContentLoaded', () => {
         const waitingMessages = document.querySelectorAll('.message-container.waiting');
         waitingMessages.forEach(msg => msg.remove());
     }
+    
+    toggleSettingsBtn.addEventListener('click', () => {
+        settingsVisible = !settingsVisible;
+        settingsContent.style.display = settingsVisible ? 'block' : 'none';
+        toggleSettingsBtn.textContent = settingsVisible ? 'Hide Options' : 'Show Options';
+    });
+    
+    refreshVoicesBtn.addEventListener('click', fetchUltravoxVoices);
+    
+    async function fetchUltravoxVoices() {
+        try {
+            updateStatus('Loading Ultravox voices...');
+            const response = await fetch('/api/ultravox-voices');
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            voiceSelect.innerHTML = '';
+            
+            if (!data.voices || data.voices.length === 0) {
+                const option = document.createElement('option');
+                option.value = "";
+                option.textContent = "No voices available";
+                voiceSelect.appendChild(option);
+                throw new Error("No voices found");
+            }
+            
+            data.voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                option.textContent = voice.name;
+                voiceSelect.appendChild(option);
+            });
+            
+            updateStatus('Ready to start');
+        } catch (error) {
+            console.error('Failed to fetch voices:', error);
+            updateStatus('Failed to load voices: ' + error.message);
+            
+            if (voiceSelect.options.length === 0) {
+                const option = document.createElement('option');
+                option.value = "Ruhaan-Elevenlabs";
+                option.textContent = "Default Voice";
+                voiceSelect.appendChild(option);
+            }
+        }
+    }
 
     startCallBtn.addEventListener('click', async () => {
         updateStatus('Connecting to agent...');
         startCallBtn.disabled = true;
         
         try {
-            // Get join URL from backend
-            const response = await fetch('/api/get-join-url');
+            const selectedVoice = voiceSelect.value;
+            
+            const response = await fetch('/api/get-join-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    voiceId: selectedVoice
+                })
+            });
+            
             const data = await response.json();
             
             if (data.error) {
@@ -49,10 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const joinUrl = data.joinUrl;
             
-            // Initialize Ultravox session
             ultravoxSession = new UltravoxSession();
             
-            // Set up event handlers
             ultravoxSession.addEventListener('status', () => {
                 const status = ultravoxSession.status;
                 
@@ -92,10 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             
-            // Join the call
             ultravoxSession.joinCall(joinUrl);
             
-            // Update UI
             endCallBtn.disabled = false;
             updateStatus('Call started');
             
@@ -119,16 +177,17 @@ document.addEventListener('DOMContentLoaded', () => {
             ultravoxSession = null;
         }
         
-        // Update UI
         startCallBtn.disabled = false;
         endCallBtn.disabled = true;
         updateStatus('Call ended');
         
-        // Add waiting message
         clearWaitingMessage();
         const waitingDiv = document.createElement('div');
         waitingDiv.classList.add('message-container', 'waiting');
         waitingDiv.innerHTML = '<p>Click the button to start a new conversation...</p>';
         chatMessages.appendChild(waitingDiv);
     }
+    
+    // Fetch voices when the page loads
+    fetchUltravoxVoices();
 });
