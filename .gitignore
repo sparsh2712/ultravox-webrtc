@@ -180,4 +180,6 @@ myenv/
 *.pem
 
 transcripts/*
-feedback/*.mp3
+feedback/
+*.mp3
+*.webm

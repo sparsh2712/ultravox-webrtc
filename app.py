@@ -191,7 +191,6 @@ def upload_feedback():
             return jsonify({"success": False, "error": "No audio file provided"}), 400
         
         audio_file = request.files['audio']
-        call_id = request.form.get('callId', 'unknown')
         
         # Create directories if they don't exist
         feedback_dir = "feedback"
@@ -203,7 +202,7 @@ def upload_feedback():
         ist_timezone = timezone(ist_offset)
         current_time_ist = datetime.now(timezone.utc).astimezone(ist_timezone)
         timestamp = current_time_ist.strftime("%Y-%m-%d-%H-%M")
-        filename = f"{timestamp}_{call_id}"
+        filename = f"{timestamp}"
         
         # Save original WebM file
         webm_path = os.path.join(feedback_dir, f"{filename}.webm")
@@ -219,8 +218,10 @@ def upload_feedback():
             command = [
                 "ffmpeg",
                 "-i", webm_path,
-                "-codec:a", "libmp3lame",
-                "-qscale:a", "2",
+                "-vn",
+                "-ab", "128k",
+                "-ar", "44100",
+                "-f", "mp3",
                 mp3_path
             ]
             
