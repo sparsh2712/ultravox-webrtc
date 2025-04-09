@@ -15,6 +15,10 @@
     </script>
 </head>
 <body>
+    <!-- Admin button in top right -->
+    <div class="admin-button-container">
+        <button id="admin-mode-btn" class="btn admin-btn">Admin Mode</button>
+    </div>
     <div class="container">
         <h1>Talk to Ashok from Mosaic Asset Management</h1>
         
@@ -42,12 +46,44 @@
             <div class="controls">
                 <button id="start-call" class="btn">Start Call</button>
                 <button id="end-call" class="btn btn-danger" disabled>End Call</button>
+                <button id="feedback-btn" class="btn" style="display: none;">Give Feedback</button>
             </div>
             <div class="status-container">
                 <p id="status-message">Ready to start</p>
             </div>
         </div>
     </div>
+
+    <!-- Admin modal -->
+    <div id="admin-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Admin Authentication</h2>
+            <div class="modal-form">
+                <input type="password" id="admin-password" placeholder="Enter admin password">
+                <button id="admin-login-btn" class="btn">Login</button>
+                <p id="admin-error" class="error-message"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback modal -->
+    <div id="feedback-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Record Feedback</h2>
+            <div id="recording-controls">
+                <button id="start-recording" class="btn">Start Recording</button>
+                <button id="stop-recording" class="btn btn-danger" disabled>Stop Recording</button>
+                <div id="recording-status" class="status-message">Ready to record</div>
+                <div id="recording-time" class="recording-timer">00:00</div>
+                <div id="audio-preview" class="audio-preview"></div>
+                <button id="upload-feedback" class="btn" disabled>Upload Feedback</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

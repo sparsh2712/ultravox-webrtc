@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const joinUrl = data.joinUrl;
             
             ultravoxSession = new UltravoxSession();
+            window.ultravoxSession = ultravoxSession; // Make it globally accessible for feedback recording
             
             ultravoxSession.addEventListener('status', () => {
                 const status = ultravoxSession.status;
@@ -175,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             ultravoxSession = null;
+            window.ultravoxSession = null;
         }
         
         startCallBtn.disabled = false;

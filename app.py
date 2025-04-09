@@ -6,6 +6,9 @@ import threading
 from datetime import datetime, timezone, timedelta
 import os
 import time
+import wave
+import io
+import subprocess
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 load_dotenv()
@@ -163,6 +166,89 @@ def get_ultravox_voices():
         print(f"Error fetching Ultravox voices: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/verify-admin', methods=['POST'])
+def verify_admin():
+    # Get the admin password from .env file
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    
+    if not admin_password:
+        return jsonify({"success": False, "error": "Admin password not configured on server"}), 400
+    
+    # Get the password from the request
+    data = request.json
+    password = data.get('password', '')
+    
+    if password == admin_password:
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "error": "Invalid password"}), 401
+
+@app.route('/api/upload-feedback', methods=['POST'])
+def upload_feedback():
+    try:
+        # Check if audio file was uploaded
+        if 'audio' not in request.files:
+            return jsonify({"success": False, "error": "No audio file provided"}), 400
+        
+        audio_file = request.files['audio']
+        call_id = request.form.get('callId', 'unknown')
+        
+        # Create directories if they don't exist
+        feedback_dir = "feedback"
+        if not os.path.exists(feedback_dir):
+            os.makedirs(feedback_dir)
+        
+        # Generate filename with timestamp and call ID
+        ist_offset = timedelta(hours=5, minutes=30)
+        ist_timezone = timezone(ist_offset)
+        current_time_ist = datetime.now(timezone.utc).astimezone(ist_timezone)
+        timestamp = current_time_ist.strftime("%Y-%m-%d-%H-%M")
+        filename = f"{timestamp}_{call_id}"
+        
+        # Save original WebM file
+        webm_path = os.path.join(feedback_dir, f"{filename}.webm")
+        audio_file.save(webm_path)
+        
+        # Convert to MP3 using FFmpeg (if available)
+        mp3_path = os.path.join(feedback_dir, f"{filename}.mp3")
+        try:
+            # Check if FFmpeg is available
+            subprocess.run(["ffmpeg", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            
+            # Convert WebM to MP3
+            command = [
+                "ffmpeg",
+                "-i", webm_path,
+                "-codec:a", "libmp3lame",
+                "-qscale:a", "2",
+                mp3_path
+            ]
+            
+            process = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True
+            )
+            
+            # Remove the original WebM file after successful conversion
+            os.remove(webm_path)
+            
+            final_path = mp3_path
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            # FFmpeg not available or conversion failed, keep the WebM file
+            print(f"FFmpeg conversion failed or not available: {str(e)}")
+            final_path = webm_path
+        
+        return jsonify({
+            "success": True,
+            "message": f"Feedback saved as {os.path.basename(final_path)}"
+        })
+        
+    except Exception as e:
+        print(f"Error saving feedback: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    
 @app.route('/api/save-transcript', methods=['POST'])
 def save_transcripts():
     data = request.json
