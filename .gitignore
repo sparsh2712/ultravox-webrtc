@@ -179,7 +179,7 @@ myenv/
 
 *.pem
 
-transcripts/*
+transcripts/*/*
 feedback/
 *.mp3
 *.webm
