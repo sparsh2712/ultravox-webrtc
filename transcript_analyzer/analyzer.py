@@ -1,23 +1,27 @@
 from typing import TypedDict, List, Dict, Any
 import re
-
+import json
+import os
+from dotenv import load_dotenv
+# Core LangChain imports
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage
 
+# LangGraph imports
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import create_react_agent
 from langgraph.func import entrypoint, task
 
-from langgraph_supervisor import create_supervisor
+load_dotenv()
 
 class ConversationState(TypedDict):
     transcript: str
     messages: List[Dict[str, Any]]
     current_prompt: str
     analysis: Dict[str, Any]
-    improved_prompt: str
     active_agent: str
+    transcript_path: str
 
 class TranscriptAnalyzer:
     def __init__(self, api_key: str):
@@ -45,16 +49,14 @@ class TranscriptAnalyzer:
         messages = [
             {
                 "role": "user",
-                "content": f"Please analyze this conversation transcript and help improve the system prompt:\n\n{formatted_transcript}\n\nCurrent system prompt:\n\n{state['current_prompt']}"
+                "content": f"Please analyze this conversation transcript:\n\n{formatted_transcript}\n\nCurrent system prompt:\n\n{state['current_prompt']}"
             }
         ]
         
         return {
             **state,
             "messages": messages,
-            "analysis": {},
-            "improved_prompt": "",
-            "active_agent": "analysis_supervisor"
+            "analysis": {}
         }
     
     def _parse_transcript(self, transcript):
@@ -105,194 +107,166 @@ class TranscriptAnalyzer:
             formatted += f"{speaker}: {entry['text']}\n\n"
         return formatted
     
-    def _postprocess_results_func(self, state):
-        """Extract improved prompt and analysis from the completed state"""
-        # Extract improved prompt if not already set
-        if not state.get("improved_prompt"):
-            for message in reversed(state["messages"]):
-                if message["role"] == "assistant":
-                    content = message["content"].lower()
-                    if "improved prompt" in content or "system prompt" in content:
-                        # Extract the prompt from code blocks if present
-                        if "```" in message["content"]:
-                            parts = message["content"].split("```")
-                            if len(parts) >= 3:
-                                state["improved_prompt"] = parts[1].strip()
-                            else:
-                                # Extract text between lines that look like headers and footers
-                                matches = re.findall(r"(?:improved prompt:?|system prompt:?|suggested prompt:?)(.*?)(?:\n\n|$)", 
-                                                    message["content"], re.DOTALL | re.IGNORECASE)
-                                if matches:
-                                    state["improved_prompt"] = matches[0].strip()
-                                else:
-                                    state["improved_prompt"] = message["content"]
-                        else:
-                            # Extract text after "Improved Prompt:" if present
-                            matches = re.findall(r"(?:improved prompt:?|system prompt:?|suggested prompt:?)(.*?)(?:\n\n|$)", 
-                                               message["content"], re.DOTALL | re.IGNORECASE)
-                            if matches:
-                                state["improved_prompt"] = matches[0].strip()
-                            else:
-                                state["improved_prompt"] = message["content"]
-                        break
+    def _save_analysis_results_func(self, state):
+        """Save analysis results to a JSON file"""
+        transcript_path = state["transcript_path"]
         
-        # Extract analysis insights
-        analysis = {}
-        for message in state["messages"]:
-            if message["role"] == "assistant" and "analysis" in message["content"].lower():
-                analysis["general_insights"] = message["content"]
-                break
+        # Extract the directory path and filename
+        directory = os.path.dirname(transcript_path)
+        filename = os.path.basename(transcript_path)
+        filename_without_ext = os.path.splitext(filename)[0]
         
-        # If we still don't have an improved prompt, use a fallback extraction
-        if not state.get("improved_prompt"):
-            for message in reversed(state["messages"]):
-                if message["role"] == "assistant":
-                    # Last resort - take the last assistant message
-                    state["improved_prompt"] = message["content"]
-                    break
+        # Get the analysis data
+        analysis_data = state.get("analysis", {})
         
-        state["analysis"] = analysis
+        # Path to the JSON file
+        json_path = os.path.join(directory, "call_analysis.json")
+        
+        # Create or update the JSON file
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {}
+        
+        # Add or update the analysis for this transcript
+        data[filename_without_ext] = analysis_data
+        
+        # Save the updated JSON
+        with open(json_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        
         return state
 
     def _build_graph(self):
-        conversation_analyst = self._create_conversation_analyst()
-        prompt_engineer = self._create_prompt_engineer()
-        issue_detector = self._create_issue_detector()
-
-        workflow = create_supervisor(
-            [conversation_analyst, prompt_engineer, issue_detector],
-            model=self.model,
-            prompt=(
-                "You are a team supervisor managing a conversation analysis team. "
-                "Your goal is to improve the system prompt based on conversation transcripts. "
-                "For analyzing user intents and agent responses, use conversation_analyst. "
-                "For detecting issues in conversations, use issue_detector. "
-                "For improving the system prompt, use prompt_engineer."
-                "\n\n"
-                "Important context: This transcript is from a financial services voice agent "
-                "selling investment products. The transcript may be incomplete or have breaks, "
-                "so focus on understanding the context from what is available."
-            ),
-            supervisor_name='analysis_supervisor'
-        )
-
+        # Create the main workflow graph
         graph = StateGraph(ConversationState)
         graph.add_node("preprocess", self._preprocess_transcript_func)
-        graph.add_node("analysis_team", workflow)
-        graph.add_node("postprocess", self._postprocess_results_func)
+        graph.add_node("analyze", self._analyze_transcript)
+        graph.add_node("save_results", self._save_analysis_results_func)
 
         graph.add_edge(START, "preprocess")
-        graph.add_edge("preprocess", "analysis_team")
-        graph.add_edge("analysis_team", "postprocess")
-        graph.add_edge("postprocess", END)
+        graph.add_edge("preprocess", "analyze")
+        graph.add_edge("analyze", "save_results")
+        graph.add_edge("save_results", END)
 
         return graph.compile()
-
-    def _create_conversation_analyst(self):
-        @tool
-        def analyze_user_intent(transcript: str) -> str:
-            """Analyze user intentions, needs, and expectations from the conversation"""
-            return "User intent analysis results"
-
-        @tool
-        def analyze_agent_responses(transcript: str) -> str:
-            """Analyze how well the agent responded to user queries and identify missed opportunities"""
-            return "Agent response analysis results"
-            
-        @tool
-        def identify_key_moments(transcript: str) -> str:
-            """Identify critical moments in the conversation where the agent should have acted differently"""
-            return "Key moments analysis"
-
-        analyst = create_react_agent(
-            model=self.model,
-            tools=[analyze_user_intent, analyze_agent_responses, identify_key_moments],
-            name="conversation_analyst",
-            prompt=(
+    
+    def _analyze_transcript(self, state):
+        """Analyze the transcript using the LLM"""
+        system_message = {
+            "role": "system",
+            "content": (
                 "You are an expert in financial sales conversation analysis. "
-                "Identify patterns, intents, and the effectiveness of responses in voice conversations. "
-                "Focus on understanding where the agent missed user intent, provided incomplete answers, "
-                "or failed to ask follow-up questions. "
+                "Analyze this conversation transcript and provide a structured analysis with the following format:"
+                "\n\n"
+                "1. First identify 2-3 key strengths of the agent in the conversation\n"
+                "2. Then identify 2-3 specific issues where the agent could improve\n"
+                "3. For each issue, provide a specific example from the transcript\n"
+                "4. For each issue, provide a specific recommendation for improvement\n"
+                "\n"
+                "Keep your analysis concise and focused on the most important points. Format your response "
+                "as a clean JSON object with the following structure:"
+                "\n\n"
+                "{\n"
+                "  \"strengths\": [\"strength 1\", \"strength 2\"],\n"
+                "  \"issues\": [\n"
+                "    {\n"
+                "      \"issue\": \"Description of issue 1\",\n"
+                "      \"example\": \"Specific example from transcript\",\n"
+                "      \"recommendation\": \"How to improve\"\n"
+                "    },\n"
+                "    {\n"
+                "      \"issue\": \"Description of issue 2\",\n"
+                "      \"example\": \"Specific example from transcript\",\n"
+                "      \"recommendation\": \"How to improve\"\n"
+                "    }\n"
+                "  ]\n"
+                "}"
+                "\n\n"
+                "Focus on identifying issues in the conversation where the agent failed to properly address user needs. "
+                "Look for misunderstandings, missing context, or prompt limitations. "
                 "Pay special attention to opportunities to collect key information about the client's "
                 "investment preferences, risk tolerance, and financial goals. "
                 "The transcripts may be incomplete with breaks, so make reasonable inferences about context."
             )
-        )
-
-        return analyst
-
-    def _create_issue_detector(self):
-        @task
-        def analyze_issues(messages):
-            system_message = {
-                "role": "system",
-                "content": (
-                    "Identify issues in the conversation where the agent failed to properly address user needs. "
-                    "Look for misunderstandings, missing context, or prompt limitations. "
-                    "Specifically identify: "
-                    "1. Instances where the agent provided potentially inaccurate information (hallucinations) "
-                    "2. Missed opportunities to ask follow-up questions "
-                    "3. Moments where the agent failed to build rapport "
-                    "4. Points where the agent did not collect key information about the client's needs "
-                    "The transcripts may be incomplete with breaks, so make reasonable inferences about context."
-                )
+        }
+        
+        # Create a new list with the system message and existing messages
+        messages = [system_message] + state["messages"]
+        
+        # Invoke the model to analyze the transcript
+        response = self.model.invoke(messages)
+        
+        # Try to parse the response as JSON
+        try:
+            # Try to find JSON in the response
+            content = response.content
+            # Look for JSON pattern (between curly braces)
+            json_match = re.search(r'(\{.*\})', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                analysis_data = json.loads(json_str)
+            else:
+                # If no JSON pattern found, try parsing the whole content
+                analysis_data = json.loads(content)
+                
+        except json.JSONDecodeError:
+            # If parsing fails, use the raw text and note the issue
+            analysis_data = {
+                "error": "Failed to parse response as JSON",
+                "raw_analysis": response.content
             }
-            msg = self.model.invoke([system_message] + messages)
-            return msg
+        
+        # Add the model's response to the messages
+        new_message = {"role": "assistant", "content": response.content}
+        updated_messages = state["messages"] + [new_message]
+        
+        return {
+            **state,
+            "messages": updated_messages,
+            "analysis": analysis_data
+        }
 
-        @entrypoint()
-        def issue_detector(state):
-            issues = analyze_issues(state['messages']).content
-            new_message = {"role": "assistant", "content": issues}
-            messages = state['messages'] + [new_message]
-            return {"messages": messages}
-
-        issue_detector.name = "issue_detector"
-        return issue_detector
-
-    def _create_prompt_engineer(self):
-        @tool
-        def suggest_prompt_improvements(current_prompt: str, analysis: str) -> str:
-            """Suggest specific improvements to the system prompt based on conversation analysis"""
-            return "Prompt improvement suggestions"
-
-        @tool
-        def generate_improved_prompt(current_prompt: str, analysis: str) -> str:
-            """Generate a complete improved system prompt incorporating all suggested improvements"""
-            return "Improved system prompt"
-
-        engineer = create_react_agent(
-            model=self.model,
-            tools=[suggest_prompt_improvements, generate_improved_prompt],
-            name="prompt_engineer",
-            prompt=(
-                "You are an expert prompt engineer for financial services voice agents. "
-                "Your task is to improve the system prompt based on the analysis of the conversation transcript. "
-                "Focus on addressing user intents and agent responses. "
-                "The improved prompt should:"
-                "\n1. Make the agent more inquisitive about the person they're talking to"
-                "\n2. Help develop a consistent persona for the agent"
-                "\n3. Guide the agent to gather key information about investment preferences"
-                "\n4. Add guardrails to prevent hallucination and inaccurate information"
-                "\n5. Handle incomplete or broken transcripts by maintaining context"
-            )
-        )
-
-        return engineer
-
-    def analyze_transcript(self, transcript: str, current_prompt: str) -> Dict[str, Any]:
+    def analyze_transcript(self, transcript_path: str, current_prompt: str) -> Dict[str, Any]:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            transcript = f.read()
+            
         initial_state = {
             "transcript": transcript,
             "current_prompt": current_prompt,
             "messages": [],
             "analysis": {},
-            "improved_prompt": "",
-            "active_agent": ""
+            "active_agent": "",
+            "transcript_path": transcript_path
         }
 
         result = self.app.invoke(initial_state)
+        return result["analysis"]
 
-        return {
-            "analysis": result["analysis"],
-            "improved_prompt": result["improved_prompt"]
-        }
+if __name__ == "__main__":
+    import os
+    
+    # Set the transcript path directly as a variable
+    text_file_path = "/Users/sparsh/Desktop/ultravox-webrtc/transcripts/2025-04-08/test_call.txt"
+    
+    # Check if the file exists
+    if not os.path.exists(text_file_path):
+        print(f"Error: File {text_file_path} not found")
+        exit(1)
+    
+    # Load current prompt from prompt.txt or use default
+    try:
+        with open("prompt.txt", "r", encoding="utf-8") as f:
+            current_prompt = f.read()
+    except FileNotFoundError:
+        current_prompt = "You are a helpful AI assistant."
+        print("Warning: prompt.txt not found, using default prompt")
+    
+    # Get API key from environment or use a default value
+    api_key = os.environ.get("GOOGLE_API_KEY", "your-api-key-here")
+    
+    analyzer = TranscriptAnalyzer(api_key)
+    result = analyzer.analyze_transcript(text_file_path, current_prompt)
+    
+    print(f"Analysis completed and saved to {os.path.dirname(text_file_path)}/call_analysis.json")
