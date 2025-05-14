@@ -30,6 +30,27 @@ h1 {
     overflow: hidden;
 }
 
+.ongoing-calls-container {
+    text-align: center;
+    background-color: #f0f4c3;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-weight: bold;
+}
+
+.test-buttons {
+    margin-top: 5px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+#ongoing-calls-count {
+    color: #e74c3c;
+    font-size: 1.2em;
+}
+
 .settings-header {
     display: flex;
     justify-content: space-between;

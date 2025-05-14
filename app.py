@@ -13,6 +13,9 @@ import subprocess
 app = Flask(__name__, static_folder='static', template_folder='templates')
 load_dotenv()
 
+# Global variable to track ongoing calls
+ongoing_calls = 0
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -44,12 +47,9 @@ def get_join_url():
             "systemPrompt": system_prompt,
             "temperature": 0.1,
             "model": "fixie-ai/ultravox",
-            "voice": "a14762fb-8e3c-494d-8765-4ff886acc318",
+            "voice": "87edb04c-06d4-47c2-bd94-683bc47e8fbe",
             "medium": {"webRtc": {}}
         }
-        
-        # Print payload for debugging
-        print("Ultravox API Payload:", payload)
         
         headers = {
             "X-API-Key": api_key,
@@ -97,9 +97,6 @@ def get_elevenlabs_voices():
         
         data = response.json()
         
-        # Debug the response structure
-        print("ElevenLabs API Response:", data)
-        
         # Check if 'voices' is in the response
         if "voices" not in data:
             return jsonify({"error": "Unexpected API response format - 'voices' key not found"}), 500
@@ -139,8 +136,6 @@ def get_ultravox_voices():
             
         data = response.json()
         data = data.get("results", [])
-        # Print the response for debugging
-        print("Ultravox voices response:", data)
         
         # Process the voices based on the response structure
         voices = []
@@ -378,6 +373,74 @@ def process_transcript(call_id,join_time):
         import traceback
         print(f"Error processing transcript: {str(e)}")
         print(traceback.format_exc())
+
+@app.route('/api/ongoing-calls', methods=['GET'])
+def get_ongoing_calls():
+    global ongoing_calls
+    print(f"[DEBUG] /api/ongoing-calls endpoint called. Current count: {ongoing_calls}")
+    return jsonify({"ongoing_calls": ongoing_calls})
+
+@app.route('/api/webhooks/call-started', methods=['POST'])
+def call_started_webhook():
+    print("[DEBUG] /api/webhooks/call-started endpoint called")
+    try:
+        event_type = request.json.get('event')
+        call_data = request.json.get('call', {})
+        call_id = call_data.get('callId', 'unknown')
+        
+        # Handle call.started event
+        if event_type == 'call.started':
+            # Increment ongoing calls counter
+            global ongoing_calls
+            ongoing_calls += 1
+            print(f"[DEBUG] Call {call_id} started. Incremented count to: {ongoing_calls}")
+            return jsonify({"status": "success", "message": "Call count incremented"}), 200
+        else:
+            print(f"[DEBUG] Received {event_type} event instead of call.started")
+            return jsonify({"status": "acknowledged", "event": event_type}), 200
+    
+    except Exception as e:
+        print(f"[ERROR] Processing call started webhook: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/webhooks/call-ended', methods=['POST'])
+def call_ended_webhook():
+    print("[DEBUG] /api/webhooks/call-ended endpoint called")
+    try:
+        event_type = request.json.get('event')
+        call_data = request.json.get('call', {})
+        call_id = call_data.get('callId', 'unknown')
+        
+        # Handle call.ended event
+        if event_type == 'call.ended':
+            # Decrement ongoing calls counter
+            global ongoing_calls
+            if ongoing_calls > 0:
+                ongoing_calls -= 1
+                print(f"[DEBUG] Call {call_id} ended. Decremented count to: {ongoing_calls}")
+            return jsonify({"status": "success", "message": "Call count decremented"}), 200
+        else:
+            print(f"[DEBUG] Received {event_type} event instead of call.ended")
+            return jsonify({"status": "acknowledged", "event": event_type}), 200
+    
+    except Exception as e:
+        print(f"[ERROR] Processing call ended webhook: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/test-increment', methods=['POST'])
+def test_increment():
+    global ongoing_calls
+    ongoing_calls += 1
+    print(f"[DEBUG] Test increment called. New count: {ongoing_calls}")
+    return jsonify({"ongoing_calls": ongoing_calls})
+
+@app.route('/api/test-decrement', methods=['POST'])
+def test_decrement():
+    global ongoing_calls
+    if ongoing_calls > 0:
+        ongoing_calls -= 1
+    print(f"[DEBUG] Test decrement called. New count: {ongoing_calls}")
+    return jsonify({"ongoing_calls": ongoing_calls})
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000, host='0.0.0.0')
