@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminErrorMsg = document.getElementById('admin-error');
     const closeModalBtns = document.querySelectorAll('.close-modal');
     const feedbackBtn = document.getElementById('feedback-btn');
+    const closeAdminPanelBtn = document.getElementById('close-admin-panel');
     
     // Feedback recording elements
     const startRecordingBtn = document.getElementById('start-recording');
@@ -18,6 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const recordingStatus = document.getElementById('recording-status');
     const recordingTime = document.getElementById('recording-time');
     const audioPreview = document.getElementById('audio-preview');
+    
+    // Setup Socket.IO connection for real-time updates
+    const socket = io();
+    
+    // Listen for call count updates from the server
+    socket.on('call_count_update', (data) => {
+        const ongoingCallsCount = document.getElementById('ongoing-calls-count');
+        if (ongoingCallsCount) {
+            ongoingCallsCount.textContent = data.count;
+        }
+    });
     
     // Audio recording variables
     let mediaRecorder = null;
@@ -113,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 // Password correct - enable admin mode
                 enableAdminMode();
+                // Reset and close the modal
+                adminErrorMsg.textContent = '';
                 adminModal.style.display = 'none';
             } else {
                 // Password incorrect
@@ -132,6 +146,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Show feedback button
         feedbackBtn.style.display = 'inline-block';
+        
+        // Show admin stats on the main page
+        document.getElementById('admin-stats').style.display = 'block';
+        
+        // Get initial call count
+        fetch('/api/ongoing-calls')
+            .then(response => response.json())
+            .then(data => {
+                const ongoingCallsCount = document.getElementById('ongoing-calls-count');
+                if (ongoingCallsCount && data.ongoing_calls !== undefined) {
+                    ongoingCallsCount.textContent = data.ongoing_calls;
+                }
+            })
+            .catch(error => console.error('Error fetching initial call count:', error));
     }
     
     // Exit admin mode
@@ -142,6 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Hide feedback button
         feedbackBtn.style.display = 'none';
+        
+        // Hide admin stats
+        document.getElementById('admin-stats').style.display = 'none';
     }
     
     // Audio recording functionality
@@ -282,5 +313,15 @@ document.addEventListener('DOMContentLoaded', () => {
             recordingStatus.textContent = 'Failed to upload: ' + error.message;
             uploadFeedbackBtn.disabled = false;
         }
+    }
+    
+    // Handle closing the admin panel
+    if (closeAdminPanelBtn) {
+        closeAdminPanelBtn.addEventListener('click', () => {
+            // Reset and hide admin modal
+            document.querySelector('.modal-form').style.display = 'block';
+            document.getElementById('admin-panel').style.display = 'none';
+            adminModal.style.display = 'none';
+        });
     }
 });

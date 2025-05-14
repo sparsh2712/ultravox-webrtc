@@ -13,6 +13,8 @@
         }
       }
     </script>
+    <!-- Socket.IO client library -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 </head>
 <body>
     <!-- Admin button in top right -->
@@ -20,13 +22,11 @@
         <button id="admin-mode-btn" class="btn admin-btn">Admin Mode</button>
     </div>
     <div class="container">
-        <div class="ongoing-calls-container">
+        <!-- Ongoing calls counter (hidden by default, shown when logged in as admin) -->
+        <div id="admin-stats" class="ongoing-calls-container" style="display: none;">
             <p>Ongoing Calls: <span id="ongoing-calls-count">0</span></p>
-            <div class="test-buttons">
-                <button id="test-increment" class="btn btn-small">+1 (Test)</button>
-                <button id="test-decrement" class="btn btn-small">-1 (Test)</button>
-            </div>
         </div>
+        
         <h1>Talk to Ashok from Mosaic Asset Management</h1>
         
         <div class="voice-settings">
@@ -70,6 +70,10 @@
                 <input type="password" id="admin-password" placeholder="Enter admin password">
                 <button id="admin-login-btn" class="btn">Login</button>
                 <p id="admin-error" class="error-message"></p>
+            </div>
+            <div id="admin-panel" class="admin-panel" style="display: none;">
+                <h3>Admin Dashboard</h3>
+                <button id="close-admin-panel" class="btn" style="margin-top: 15px;">Close Dashboard</button>
             </div>
         </div>
     </div>

@@ -9,40 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsContent = document.getElementById('settings-content');
     const voiceSelect = document.getElementById('voice-select');
     const refreshVoicesBtn = document.getElementById('refresh-voices');
-    const ongoingCallsCount = document.getElementById('ongoing-calls-count');
-    const testIncrementBtn = document.getElementById('test-increment');
-    const testDecrementBtn = document.getElementById('test-decrement');
     
     let ultravoxSession = null;
     let lastTranscript = null;
     let settingsVisible = false;
-    let callCountUpdateInterval = null;
-
-    // Function to fetch and update ongoing calls count
-    async function updateOngoingCallsCount() {
-        try {
-            const response = await fetch('/api/ongoing-calls');
-            const data = await response.json();
-            
-            if (data.ongoing_calls !== undefined) {
-                ongoingCallsCount.textContent = data.ongoing_calls;
-            }
-        } catch (error) {
-            console.error('Failed to fetch ongoing calls count:', error);
-        }
-    }
-    
-    // Update call count every 10 seconds
-    function startCallCountUpdates() {
-        // Fetch immediately on page load
-        updateOngoingCallsCount();
-        
-        // Then set up the interval
-        callCountUpdateInterval = setInterval(updateOngoingCallsCount, 10000);
-    }
-    
-    // Start the call count updates when the page loads
-    startCallCountUpdates();
 
     function updateStatus(message) {
         statusMessage.textContent = message;
@@ -222,44 +192,4 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Fetch voices when the page loads
     fetchUltravoxVoices();
-
-    // Test increment button
-    if (testIncrementBtn) {
-        testIncrementBtn.addEventListener('click', async () => {
-            try {
-                console.log('Test increment button clicked');
-                const response = await fetch('/api/test-increment', {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                if (data.ongoing_calls !== undefined) {
-                    ongoingCallsCount.textContent = data.ongoing_calls;
-                }
-            } catch (error) {
-                console.error('Failed to increment count:', error);
-            }
-        });
-    } else {
-        console.error('Test increment button not found in DOM');
-    }
-    
-    // Test decrement button
-    if (testDecrementBtn) {
-        testDecrementBtn.addEventListener('click', async () => {
-            try {
-                console.log('Test decrement button clicked');
-                const response = await fetch('/api/test-decrement', {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                if (data.ongoing_calls !== undefined) {
-                    ongoingCallsCount.textContent = data.ongoing_calls;
-                }
-            } catch (error) {
-                console.error('Failed to decrement count:', error);
-            }
-        });
-    } else {
-        console.error('Test decrement button not found in DOM');
-    }
 });

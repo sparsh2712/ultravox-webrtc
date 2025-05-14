@@ -332,3 +332,16 @@ h1 {
 #recording-controls button {
     margin: 5px 0;
 }
+
+.admin-panel {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.admin-panel .ongoing-calls-container {
+    background-color: #e1f5fe;
+    margin-bottom: 0;
+}

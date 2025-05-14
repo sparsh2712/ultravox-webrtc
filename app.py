@@ -9,9 +9,11 @@ import time
 import wave
 import io
 import subprocess
+from flask_socketio import SocketIO
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 load_dotenv()
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Global variable to track ongoing calls
 ongoing_calls = 0
@@ -19,6 +21,10 @@ ongoing_calls = 0
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# Helper function to broadcast call count updates
+def broadcast_call_count():
+    socketio.emit('call_count_update', {'count': ongoing_calls})
 
 @app.route('/api/get-join-url', methods=['POST'])
 def get_join_url():
@@ -394,6 +400,10 @@ def call_started_webhook():
             global ongoing_calls
             ongoing_calls += 1
             print(f"[DEBUG] Call {call_id} started. Incremented count to: {ongoing_calls}")
+            
+            # Broadcast the updated count to all connected clients
+            broadcast_call_count()
+            
             return jsonify({"status": "success", "message": "Call count incremented"}), 200
         else:
             print(f"[DEBUG] Received {event_type} event instead of call.started")
@@ -418,6 +428,10 @@ def call_ended_webhook():
             if ongoing_calls > 0:
                 ongoing_calls -= 1
                 print(f"[DEBUG] Call {call_id} ended. Decremented count to: {ongoing_calls}")
+                
+                # Broadcast the updated count to all connected clients
+                broadcast_call_count()
+                
             return jsonify({"status": "success", "message": "Call count decremented"}), 200
         else:
             print(f"[DEBUG] Received {event_type} event instead of call.ended")
@@ -427,20 +441,5 @@ def call_ended_webhook():
         print(f"[ERROR] Processing call ended webhook: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/api/test-increment', methods=['POST'])
-def test_increment():
-    global ongoing_calls
-    ongoing_calls += 1
-    print(f"[DEBUG] Test increment called. New count: {ongoing_calls}")
-    return jsonify({"ongoing_calls": ongoing_calls})
-
-@app.route('/api/test-decrement', methods=['POST'])
-def test_decrement():
-    global ongoing_calls
-    if ongoing_calls > 0:
-        ongoing_calls -= 1
-    print(f"[DEBUG] Test decrement called. New count: {ongoing_calls}")
-    return jsonify({"ongoing_calls": ongoing_calls})
-
 if __name__ == '__main__':
-    app.run(debug=True, port=8000, host='0.0.0.0')
+    socketio.run(app, debug=True, port=8000, host='0.0.0.0')
